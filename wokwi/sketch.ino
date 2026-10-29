@@ -1,4 +1,4 @@
-#include <DHT.h>
+#include <DHTesp.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
 
@@ -13,13 +13,13 @@ constexpr unsigned long kPublishIntervalMs = 5000;
 struct RoomSensor {
   const char* room;
   uint8_t pin;
-  DHT* sensor;
+  DHTesp* sensor;
 };
 
-DHT livingRoomDht(15, DHT22);
-DHT kitchenDht(4, DHT22);
-DHT bedroomDht(5, DHT22);
-DHT bathroomDht(18, DHT22);
+DHTesp livingRoomDht;
+DHTesp kitchenDht;
+DHTesp bedroomDht;
+DHTesp bathroomDht;
 
 RoomSensor sensors[] = {
     {"Phòng khách", 15, &livingRoomDht},
@@ -53,9 +53,8 @@ bool connectToWifi() {
 }
 
 bool appendReading(String& json, const RoomSensor& sensor) {
-  const float temperature = sensor.sensor->readTemperature();
-  const float humidity = sensor.sensor->readHumidity();
-  if (isnan(temperature) || isnan(humidity)) {
+  const TempAndHumidity reading = sensor.sensor->getTempAndHumidity();
+  if (isnan(reading.temperature) || isnan(reading.humidity)) {
     Serial.printf("Could not read DHT22 in %s; skipping publish.\n",
                   sensor.room);
     return false;
@@ -65,11 +64,12 @@ bool appendReading(String& json, const RoomSensor& sensor) {
   json += "{\"room\":\"";
   json += sensor.room;
   json += "\",\"temperature\":";
-  json += String(temperature, 1);
+  json += String(reading.temperature, 1);
   json += ",\"humidity\":";
-  json += String(humidity, 1);
+  json += String(reading.humidity, 1);
   json += '}';
-  Serial.printf("%s: %.1f C, %.1f %%\n", sensor.room, temperature, humidity);
+  Serial.printf("%s: %.1f C, %.1f %%\n", sensor.room, reading.temperature,
+                reading.humidity);
   return true;
 }
 
@@ -104,7 +104,7 @@ void publishReadings() {
 void setup() {
   Serial.begin(115200);
   for (RoomSensor& sensor : sensors) {
-    sensor.sensor->begin();
+    sensor.sensor->setup(sensor.pin, DHTesp::DHT22);
   }
   connectToWifi();
   publishReadings();

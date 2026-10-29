@@ -17,7 +17,10 @@ void main() {
       create: (_) {
         final provider = SmartHomeProvider(apiService: ApiService())
           ..initialize();
-        const serverUrl = String.fromEnvironment('SMART_HOME_SERVER_URL');
+        const serverUrl = String.fromEnvironment(
+          'SMART_HOME_SERVER_URL',
+          defaultValue: 'https://smart-home-demo-api.onrender.com',
+        );
         if (serverUrl.isNotEmpty) {
           unawaited(provider.connectToServer(serverUrl));
         }

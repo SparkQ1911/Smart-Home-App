@@ -1,9 +1,9 @@
 # Smart Home App
 
 Ứng dụng Flutter bằng tiếng Việt để giám sát cảm biến và điều khiển thiết bị
-IoT thông qua REST API. Mặc định ứng dụng chạy **chế độ demo** với dữ liệu
-minh họa; trạng thái này được đánh dấu rõ trong giao diện. Chuyển sang chế độ
-Server sẽ xóa dữ liệu demo khỏi màn hình và chỉ dùng dữ liệu nhận từ API.
+IoT thông qua REST API. Khi khởi động, app tự kết nối API demo công khai
+`https://smart-home-demo-api.onrender.com`; có thể đổi Server trong **Cài đặt**
+hoặc chọn **Chuyển về chế độ demo** để dùng dữ liệu minh họa.
 
 ## Yêu cầu
 
@@ -56,6 +56,8 @@ flutter create --platforms=android .
 
 ## Kết nối Server
 
+App tự kết nối server công khai khi mở. Để dùng server khác:
+
 1. Mở tab **Cài đặt**.
 2. Nhập URL gốc, ví dụ `http://192.168.1.10:8080`.
 3. Chọn **Kiểm tra và kết nối**. Ứng dụng gọi `GET /api/devices`; chỉ khi
@@ -94,8 +96,7 @@ Server demo đã được deploy ở gói Free trên Render:
 `https://smart-home-demo-api.onrender.com`. Có thể kiểm tra trạng thái tại
 `https://smart-home-demo-api.onrender.com/api/health`.
 
-Để kết nối app, mở **Cài đặt**, nhập URL gốc
-`https://smart-home-demo-api.onrender.com` rồi chọn **Kiểm tra và kết nối**.
+App tự kết nối URL này khi khởi động; không cần nhập lại trong **Cài đặt**.
 Để gửi dữ liệu mô phỏng, chép các tệp trong `wokwi/` vào dự án ESP32 trên
 [Wokwi](https://wokwi.com/) và chạy simulation. Firmware đã cấu hình gửi
 đến server công khai mỗi 5 giây; app đọc dữ liệu mới mỗi 3 giây.
