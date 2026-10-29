@@ -1,6 +1,7 @@
 #include <DHTesp.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 
 namespace {
 
@@ -82,7 +83,9 @@ void publishReadings() {
   }
   payload += "]}";
 
-  WiFiClient client;
+  WiFiClientSecure client;
+  // Only for the non-sensitive Wokwi demo data.
+  client.setInsecure();
   HTTPClient request;
   if (!request.begin(client, kServerUrl)) {
     Serial.println("Could not create HTTP request.");
@@ -95,7 +98,7 @@ void publishReadings() {
 
   Serial.printf("Server response: HTTP %d %s\n", status, response.c_str());
   if (status != 202) {
-    Serial.println("Publish failed; check the private gateway and server URL.");
+    Serial.println("Publish failed; check the public server URL.");
   }
 }
 

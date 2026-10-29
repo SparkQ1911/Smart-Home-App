@@ -73,7 +73,8 @@ Server mẫu chạy bằng Python 3, không cần cài thư viện ngoài:
 python server\smart_home_server.py
 ```
 
-Mở [Wokwi](https://wokwi.com/), tạo dự án ESP32 mới, rồi chép
+Mở [dự án Wokwi Smart Home đã tạo](https://wokwi.com/projects/479187038352651265)
+hoặc tạo dự án ESP32 mới, rồi chép
 `wokwi\diagram.json`, `wokwi\sketch.ino` và `wokwi\libraries.txt` vào dự án.
 Mạch gồm ESP32 và bốn cảm biến DHT22; bấm Start Simulation để gửi số đo lên
 `POST /api/simulator/publish` mỗi 5 giây. Có thể bấm vào từng DHT22 trong
@@ -88,7 +89,9 @@ trong editor Wokwi chọn **F1 → Enable Private Wokwi IoT Gateway**. Firmware
 dùng `host.wokwi.internal:8080` nếu thử server local (hãy đổi `kServerUrl`
 trong sketch). Với server HTTPS công khai, Wokwi Public Gateway dùng được
 mà không cần Private Gateway; dữ liệu gửi qua Public Gateway có thể bị giám
-sát, không gửi dữ liệu riêng tư hoặc thông tin xác thực.
+sát. Firmware mẫu không xác minh chứng chỉ TLS và chỉ được dùng với dữ liệu
+giả lập không nhạy cảm; không gửi thông tin đăng nhập, bí mật hoặc dữ liệu
+thiết bị thật.
 
 ### Deploy server demo công khai trên Render Free
 
@@ -97,9 +100,9 @@ Server demo đã được deploy ở gói Free trên Render:
 `https://smart-home-demo-api.onrender.com/api/health`.
 
 App tự kết nối URL này khi khởi động; không cần nhập lại trong **Cài đặt**.
-Để gửi dữ liệu mô phỏng, chép các tệp trong `wokwi/` vào dự án ESP32 trên
-[Wokwi](https://wokwi.com/) và chạy simulation. Firmware đã cấu hình gửi
-đến server công khai mỗi 5 giây; app đọc dữ liệu mới mỗi 3 giây.
+Để gửi dữ liệu mô phỏng, mở [dự án Wokwi đã tạo](https://wokwi.com/projects/479187038352651265)
+và bấm **Start the simulation**. Firmware gửi số đo đến server công khai
+mỗi 5 giây; app đọc dữ liệu mới mỗi 3 giây.
 
 Blueprint và cấu hình service nằm trong repository công khai
 `SparkQ1911/Smart-Home-App`; service hiện dùng cấu hình Free ở Singapore.
