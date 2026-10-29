@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: smart-home-demo-api
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: server
+    buildCommand: python -m py_compile smart_home_server.py
+    startCommand: python smart_home_server.py
+    healthCheckPath: /api/health
