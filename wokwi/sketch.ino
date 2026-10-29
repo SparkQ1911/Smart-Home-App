@@ -7,7 +7,7 @@ namespace {
 constexpr char kWifiSsid[] = "Wokwi-GUEST";
 constexpr char kWifiPassword[] = "";
 constexpr char kServerUrl[] =
-    "https://YOUR-RENDER-SERVICE.onrender.com/api/simulator/publish";
+    "https://smart-home-demo-api.onrender.com/api/simulator/publish";
 constexpr unsigned long kPublishIntervalMs = 5000;
 
 struct RoomSensor {

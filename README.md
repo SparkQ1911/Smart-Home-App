@@ -90,18 +90,20 @@ sát, không gửi dữ liệu riêng tư hoặc thông tin xác thực.
 
 ### Deploy server demo công khai trên Render Free
 
-`render.yaml` đã cấu hình Web Service miễn phí tại Singapore. Để deploy:
+Server demo đã được deploy ở gói Free trên Render:
+`https://smart-home-demo-api.onrender.com`. Có thể kiểm tra trạng thái tại
+`https://smart-home-demo-api.onrender.com/api/health`.
 
-1. Dùng repository GitHub công khai `SparkQ1911/Smart-Home-App` đã chứa mã nguồn của dự án.
-2. Đăng nhập [Render Dashboard](https://dashboard.render.com), chọn **New →
-   Blueprint**, kết nối repository `SparkQ1911/Smart-Home-App` và áp dụng
-   `render.yaml`.
-3. Chọn gói **Free** nếu Render yêu cầu xác nhận; không tạo database hoặc
-   dịch vụ trả phí.
-4. Chờ service chạy, lấy URL dạng `https://smart-home-demo-api.onrender.com`.
-5. Thay `YOUR-RENDER-SERVICE` trong `wokwi\sketch.ino` bằng hostname thực tế,
-   cập nhật sketch trên Wokwi và chạy simulation. Trong app, mở **Cài đặt**,
-   nhập URL gốc HTTPS rồi chọn **Kiểm tra và kết nối**.
+Để kết nối app, mở **Cài đặt**, nhập URL gốc
+`https://smart-home-demo-api.onrender.com` rồi chọn **Kiểm tra và kết nối**.
+Để gửi dữ liệu mô phỏng, chép các tệp trong `wokwi/` vào dự án ESP32 trên
+[Wokwi](https://wokwi.com/) và chạy simulation. Firmware đã cấu hình gửi
+đến server công khai mỗi 5 giây; app đọc dữ liệu mới mỗi 3 giây.
+
+Blueprint và cấu hình service nằm trong repository công khai
+`SparkQ1911/Smart-Home-App`; service hiện dùng cấu hình Free ở Singapore.
+Không nâng cấp instance hoặc tạo dịch vụ trả phí nếu muốn tiếp tục dùng miễn
+phí.
 
 Render Free không yêu cầu chọn gói trả phí nhưng có hạn mức, có thể ngủ sau
 15 phút không có yêu cầu, khởi động lại và làm mất trạng thái trong RAM.
