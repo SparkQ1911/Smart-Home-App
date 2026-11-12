@@ -1,29 +1,24 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/smart_home_provider.dart';
+import 'screens/auth_screen.dart';
 import 'screens/devices_screen.dart';
 import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/sensors_screen.dart';
 import 'screens/settings_screen.dart';
 import 'services/api_service.dart';
+import 'services/session_store.dart';
 
 void main() {
   runApp(
     ChangeNotifierProvider(
       create: (_) {
-        final provider = SmartHomeProvider(apiService: ApiService())
-          ..initialize();
-        const serverUrl = String.fromEnvironment(
-          'SMART_HOME_SERVER_URL',
-          defaultValue: 'https://smart-home-demo-api.onrender.com',
-        );
-        if (serverUrl.isNotEmpty) {
-          unawaited(provider.connectToServer(serverUrl));
-        }
+        final provider = SmartHomeProvider(
+          apiService: ApiService(),
+          sessionStore: SecureSessionStore(),
+        )..initialize();
         return provider;
       },
       child: const SmartHomeApp(),
@@ -109,7 +104,27 @@ class SmartHomeApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const SmartHomeShell(),
+      home: const AppGate(),
+    );
+  }
+}
+
+class AppGate extends StatelessWidget {
+  const AppGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<SmartHomeProvider>(
+      builder: (context, provider, _) {
+        if (provider.isInitializing) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return provider.currentUser == null
+            ? const AuthScreen()
+            : const SmartHomeShell();
+      },
     );
   }
 }

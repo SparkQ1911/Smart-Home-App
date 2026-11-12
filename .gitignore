@@ -5,6 +5,8 @@
 *.pyo
 *.swp
 .DS_Store
+server/.env.local
+code_ESP32_va_trang_thu/machine_config.py
 .atom/
 .build/
 .buildlog/

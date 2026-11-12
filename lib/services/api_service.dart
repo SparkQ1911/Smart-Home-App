@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/device.dart';
+import '../models/auth_user.dart';
 import '../models/history_entry.dart';
 import '../models/sensor_data.dart';
 
@@ -19,12 +20,20 @@ class HistoryNotSupportedException extends ApiException {
       : super('Server chưa hỗ trợ API lịch sử.');
 }
 
+class AuthSession {
+  const AuthSession({required this.token, required this.user});
+
+  final String token;
+  final AuthUser user;
+}
+
 class ApiEndpoints {
   const ApiEndpoints({
     this.devices = '/api/devices',
     this.latestSensors = '/api/sensors/latest',
     this.deviceStatus = '/api/devices/{id}/status',
     this.deviceControl = '/api/devices/{id}/control',
+    this.deviceCommand = '/api/devices/{id}/commands/{commandId}',
     this.history = '/api/history',
   });
 
@@ -32,6 +41,7 @@ class ApiEndpoints {
   final String latestSensors;
   final String deviceStatus;
   final String deviceControl;
+  final String deviceCommand;
   final String history;
 }
 
@@ -46,8 +56,11 @@ class ApiService {
   final ApiEndpoints endpoints;
   final Duration timeout;
   Uri? _baseUri;
+  String? _accessToken;
 
   String? get baseUrl => _baseUri?.toString().replaceFirst(RegExp(r'/$'), '');
+
+  void setAccessToken(String? token) => _accessToken = token;
 
   void configure(String value) {
     final parsed = Uri.tryParse(value.trim());
@@ -86,6 +99,56 @@ class ApiService {
     }
   }
 
+  Future<AuthSession> register({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final payload = await _request(
+      'POST',
+      '/api/auth/register',
+      body: jsonEncode({'name': name, 'email': email, 'password': password}),
+      authenticated: false,
+    );
+    return _parseAuthSession(payload);
+  }
+
+  Future<AuthSession> login({
+    required String email,
+    required String password,
+  }) async {
+    final payload = await _request(
+      'POST',
+      '/api/auth/login',
+      body: jsonEncode({'email': email, 'password': password}),
+      authenticated: false,
+    );
+    return _parseAuthSession(payload);
+  }
+
+  Future<AuthUser> getCurrentUser() async {
+    final payload = await _get('/api/auth/me');
+    final map = _asMap(payload, 'tài khoản');
+    return _parseUser(map['user']);
+  }
+
+  Future<void> deleteAccount({required String password}) async {
+    final uri = _uri('/api/auth/me');
+    late http.Response response;
+    try {
+      response = await _client
+          .delete(
+            uri,
+            headers: _headers()..['Content-Type'] = 'application/json',
+            body: jsonEncode({'password': password}),
+          )
+          .timeout(timeout);
+    } on Exception catch (error) {
+      throw ApiException(_networkMessage(error));
+    }
+    _decodeResponse(response);
+  }
+
   Future<SensorData> getLatestSensors() async {
     final payload = await _get(endpoints.latestSensors);
     try {
@@ -112,18 +175,45 @@ class ApiService {
       path,
       body: jsonEncode({'state': turnOn ? 'ON' : 'OFF'}),
     );
-    if (payload is Map<String, dynamic> &&
-        (payload.containsKey('status') || payload.containsKey('state'))) {
-      return _parseState(payload['status'] ?? payload['state']);
+    final response = _asMap(payload, 'lệnh điều khiển');
+    final commandId = response['commandId'];
+    if (commandId is! String || commandId.isEmpty) {
+      if (response.containsKey('status') || response.containsKey('state')) {
+        return _parseState(response['status'] ?? response['state']);
+      }
+      throw const ApiException('Server không trả về mã lệnh điều khiển.');
     }
-    return getDeviceStatus(id);
+    final commandPath = endpoints.deviceCommand
+        .replaceAll('{id}', Uri.encodeComponent(id))
+        .replaceAll('{commandId}', Uri.encodeComponent(commandId));
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    while (DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      final command = _asMap(await _get(commandPath), 'trạng thái lệnh');
+      switch (command['status']) {
+        case 'completed':
+          return _parseState(command['reportedState']);
+        case 'failed':
+          throw const ApiException(
+            'Thiết bị phản hồi trạng thái khác với yêu cầu.',
+          );
+        case 'pending':
+          break;
+        default:
+          throw const ApiException(
+              'Server trả về trạng thái lệnh không hợp lệ.');
+      }
+    }
+    throw const ApiException(
+      'Thiết bị chưa phản hồi lệnh. Kiểm tra kết nối ESP32 rồi thử lại.',
+    );
   }
 
   Future<List<HistoryEntry>> getHistory() async {
     final uri = _uri(endpoints.history);
     late http.Response response;
     try {
-      response = await _client.get(uri).timeout(timeout);
+      response = await _client.get(uri, headers: _headers()).timeout(timeout);
     } on Exception catch (error) {
       throw ApiException(_networkMessage(error));
     }
@@ -152,7 +242,7 @@ class ApiService {
     final uri = _uri(path);
     late http.Response response;
     try {
-      response = await _client.get(uri).timeout(timeout);
+      response = await _client.get(uri, headers: _headers()).timeout(timeout);
     } on Exception catch (error) {
       throw ApiException(_networkMessage(error));
     }
@@ -163,15 +253,18 @@ class ApiService {
     String method,
     String path, {
     String? body,
+    bool authenticated = true,
   }) async {
     final uri = _uri(path);
+    final headers = _headers(authenticated: authenticated)
+      ..putIfAbsent('Content-Type', () => 'application/json');
     late http.Response response;
     try {
       response = switch (method) {
         'POST' => await _client
             .post(
               uri,
-              headers: const {'Content-Type': 'application/json'},
+              headers: headers,
               body: body,
             )
             .timeout(timeout),
@@ -185,9 +278,19 @@ class ApiService {
 
   Object? _decodeResponse(http.Response response) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      String? detail;
+      try {
+        final payload = jsonDecode(utf8.decode(response.bodyBytes));
+        if (payload is Map<String, dynamic> && payload['error'] is String) {
+          detail = payload['error'] as String;
+        }
+      } on FormatException {
+        detail = null;
+      }
       throw ApiException(
-        'Server trả về HTTP ${response.statusCode}'
-        '${response.reasonPhrase == null ? '' : ': ${response.reasonPhrase}'}.',
+        detail ??
+            'Server trả về HTTP ${response.statusCode}'
+                '${response.reasonPhrase == null ? '' : ': ${response.reasonPhrase}'}.',
       );
     }
     if (response.bodyBytes.isEmpty) return null;
@@ -204,6 +307,34 @@ class ApiService {
       throw const ApiException('Chưa cấu hình địa chỉ Server.');
     }
     return base.resolve(path.replaceFirst(RegExp(r'^/+'), ''));
+  }
+
+  Map<String, String> _headers({bool authenticated = true}) {
+    final token = authenticated ? _accessToken : null;
+    return {
+      'Accept': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+
+  AuthSession _parseAuthSession(Object? payload) {
+    final map = _asMap(payload, 'phiên đăng nhập');
+    final token = map['token'];
+    if (token is! String || token.isEmpty) {
+      throw const ApiException('Server không trả về mã phiên hợp lệ.');
+    }
+    return AuthSession(
+      token: token,
+      user: _parseUser(map['user']),
+    );
+  }
+
+  AuthUser _parseUser(Object? value) {
+    try {
+      return AuthUser.fromJson(_asMap(value, 'tài khoản'));
+    } on FormatException catch (error) {
+      throw ApiException(error.message);
+    }
   }
 
   String _devicePath(String template, String id) =>

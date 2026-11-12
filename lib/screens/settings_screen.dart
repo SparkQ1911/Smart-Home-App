@@ -4,33 +4,13 @@ import 'package:provider/provider.dart';
 import '../providers/smart_home_provider.dart';
 import '../widgets/connection_status.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  late final TextEditingController _addressController;
-
-  @override
-  void initState() {
-    super.initState();
-    _addressController = TextEditingController(
-      text: context.read<SmartHomeProvider>().serverAddress,
-    );
-  }
-
-  @override
-  void dispose() {
-    _addressController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<SmartHomeProvider>();
+    final user = provider.currentUser;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -40,95 +20,133 @@ class _SettingsScreenState extends State<SettingsScreen> {
           error: provider.connectionError,
         ),
         const SizedBox(height: 20),
-        Text('Cấu hình Server',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                )),
-        const SizedBox(height: 8),
-        const Text(
-          'Nhập địa chỉ gốc của REST API, ví dụ http://192.168.1.10:8080. '
-          'Không nhập mật khẩu hoặc thông tin đăng nhập vào địa chỉ này.',
-        ),
-        const SizedBox(height: 6),
         Text(
-          'App tự đồng bộ dữ liệu Server mỗi 3 giây khi đang kết nối.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _addressController,
-          keyboardType: TextInputType.url,
-          textInputAction: TextInputAction.done,
-          autocorrect: false,
-          decoration: const InputDecoration(
-            labelText: 'Địa chỉ Server',
-            hintText: 'http://192.168.1.10:8080',
-            prefixIcon: Icon(Icons.link_rounded),
-            border: OutlineInputBorder(),
-          ),
+          'Tài khoản',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
         ),
         const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: provider.isCheckingConnection ? null : _checkConnection,
-          icon: provider.isCheckingConnection
-              ? const SizedBox(
-                  height: 18,
-                  width: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.wifi_find_rounded),
-          label: Text(provider.isCheckingConnection
-              ? 'Đang kiểm tra...'
-              : 'Kiểm tra và kết nối'),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed:
-              provider.isCheckingConnection ? null : provider.useDemoMode,
-          icon: const Icon(Icons.science_outlined),
-          label: const Text('Chuyển về chế độ demo'),
-        ),
-        const SizedBox(height: 20),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Endpoint mặc định',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        )),
-                const SizedBox(height: 10),
-                const Text('GET  /api/devices'),
-                const Text('GET  /api/sensors/latest'),
-                const Text('GET  /api/devices/{id}/status'),
-                const Text('POST /api/devices/{id}/control'),
-                const Text('GET  /api/history'),
-                const Text('POST /api/simulator/publish'),
-                const SizedBox(height: 10),
-                Text(
-                  'Có thể thay đổi đường dẫn endpoint trong '
-                  'lib/services/api_service.dart.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                CircleAvatar(
+                  radius: 34,
+                  child: Text(
+                    user?.name.isNotEmpty == true
+                        ? user!.name.substring(0, 1).toUpperCase()
+                        : '?',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
                 ),
+                const SizedBox(height: 12),
+                Text(
+                  user?.name ?? 'Chưa đăng nhập',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                if (user != null) ...[
+                  const SizedBox(height: 4),
+                  Text(user.email),
+                ],
               ],
             ),
           ),
+        ),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+          onPressed: user == null ? null : () => _logout(context),
+          icon: const Icon(Icons.logout_rounded),
+          label: const Text('Đăng xuất'),
+        ),
+        const SizedBox(height: 10),
+        TextButton.icon(
+          onPressed: user == null ? null : () => _deleteAccount(context),
+          icon: const Icon(Icons.delete_forever_outlined),
+          label: const Text('Xóa tài khoản'),
+          style: TextButton.styleFrom(
+            foregroundColor: Theme.of(context).colorScheme.error,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Xóa tài khoản sẽ gỡ thông tin đăng nhập của bạn. Dữ liệu cảm biến '
+          'và thiết bị dùng chung không bị xóa.',
+          style: Theme.of(context).textTheme.bodySmall,
+          textAlign: TextAlign.center,
         ),
       ],
     );
   }
 
-  Future<void> _checkConnection() async {
-    final provider = context.read<SmartHomeProvider>();
-    await provider.connectToServer(_addressController.text);
-    if (!mounted) return;
-    final message = provider.isConnected
-        ? 'Kết nối Server thành công.'
-        : provider.connectionError ?? 'Không thể kết nối Server.';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+  Future<void> _logout(BuildContext context) async {
+    try {
+      await context.read<SmartHomeProvider>().logout();
+    } on Exception catch (error) {
+      if (context.mounted) {
+        _showMessage(context, 'Không thể đăng xuất: $error');
+      }
+    }
+  }
+
+  Future<void> _deleteAccount(BuildContext context) async {
+    final passwordController = TextEditingController();
+    final password = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Xóa tài khoản?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Thao tác này không thể hoàn tác. Nhập mật khẩu để xác nhận.',
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: passwordController,
+              autofocus: true,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Mật khẩu'),
+              onSubmitted: (_) =>
+                  Navigator.of(dialogContext).pop(passwordController.text),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(passwordController.text),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Xóa tài khoản'),
+          ),
+        ],
+      ),
     );
+    passwordController.dispose();
+    if (password == null || password.isEmpty || !context.mounted) return;
+
+    try {
+      await context.read<SmartHomeProvider>().deleteAccount(password: password);
+    } on Exception catch (error) {
+      if (context.mounted) {
+        _showMessage(context, 'Không thể xóa tài khoản: $error');
+      }
+    }
+  }
+
+  void _showMessage(BuildContext context, String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }

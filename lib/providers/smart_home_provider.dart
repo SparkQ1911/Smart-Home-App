@@ -2,20 +2,32 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../config/app_config.dart';
+import '../models/auth_user.dart';
 import '../models/device.dart';
 import '../models/history_entry.dart';
 import '../models/sensor_data.dart';
 import '../services/api_service.dart';
+import '../services/session_store.dart';
 
 enum DataMode { demo, server }
 
 class SmartHomeProvider extends ChangeNotifier {
-  SmartHomeProvider({required ApiService apiService})
-      : _apiService = apiService;
+  SmartHomeProvider({
+    required ApiService apiService,
+    SessionStore? sessionStore,
+  })  : _apiService = apiService,
+        _sessionStore = sessionStore ?? MemorySessionStore() {
+    _apiService.configure(AppConfig.apiBaseUrl);
+  }
 
   final ApiService _apiService;
+  final SessionStore _sessionStore;
   DataMode mode = DataMode.demo;
-  String serverAddress = '';
+  AuthUser? currentUser;
+  String? authError;
+  bool isInitializing = true;
+  bool isAuthBusy = false;
   bool isConnected = false;
   bool isCheckingConnection = false;
   bool isLoadingDevices = false;
@@ -44,7 +56,91 @@ class SmartHomeProvider extends ChangeNotifier {
   int get activeDeviceCount => devices.where((device) => device.isOn).length;
 
   void initialize() {
+    unawaited(restoreSession());
+  }
+
+  Future<void> restoreSession() async {
+    isInitializing = true;
+    notifyListeners();
+    try {
+      final token = await _sessionStore.readToken();
+      if (token == null || token.isEmpty) return;
+      _apiService.setAccessToken(token);
+      currentUser = await _apiService.getCurrentUser();
+      await connectToServer();
+    } on ApiException catch (error) {
+      authError = error.message;
+      currentUser = null;
+      _apiService.setAccessToken(null);
+    } on Exception catch (error) {
+      authError = 'Không thể khôi phục phiên đăng nhập: $error';
+    } finally {
+      isInitializing = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> register({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    await _authenticate(
+      () => _apiService.register(
+        name: name,
+        email: email,
+        password: password,
+      ),
+    );
+  }
+
+  Future<void> login({
+    required String email,
+    required String password,
+  }) async {
+    await _authenticate(
+      () => _apiService.login(email: email, password: password),
+    );
+  }
+
+  Future<void> _authenticate(
+    Future<AuthSession> Function() authenticate,
+  ) async {
+    if (isAuthBusy) return;
+    isAuthBusy = true;
+    authError = null;
+    notifyListeners();
+    try {
+      final session = await authenticate();
+      await _sessionStore.writeToken(session.token);
+      _apiService.setAccessToken(session.token);
+      currentUser = session.user;
+      await connectToServer();
+    } on ApiException catch (error) {
+      authError = error.message;
+      rethrow;
+    } on Exception catch (error) {
+      authError = 'Không thể lưu phiên đăng nhập an toàn: $error';
+      throw ApiException(authError!);
+    } finally {
+      isAuthBusy = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> logout() async {
+    await _sessionStore.clearToken();
+    _apiService.setAccessToken(null);
+    currentUser = null;
+    authError = null;
+    _pollTimer?.cancel();
+    _pollTimer = null;
     _loadDemoData();
+  }
+
+  Future<void> deleteAccount({required String password}) async {
+    await _apiService.deleteAccount(password: password);
+    await logout();
   }
 
   void _loadDemoData() {
@@ -114,14 +210,12 @@ class SmartHomeProvider extends ChangeNotifier {
     _loadDemoData();
   }
 
-  Future<void> connectToServer(String address) async {
+  Future<void> connectToServer() async {
     if (isCheckingConnection) return;
     isCheckingConnection = true;
     connectionError = null;
     notifyListeners();
     try {
-      _apiService.configure(address);
-      serverAddress = _apiService.baseUrl ?? address.trim();
       mode = DataMode.server;
       isConnected = false;
       devices = const [];

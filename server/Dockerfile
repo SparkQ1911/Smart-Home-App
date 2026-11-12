@@ -5,7 +5,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PORT=8080
 
 WORKDIR /app
-COPY smart_home_server.py .
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY smart_home_server.py mqtt_bridge.py ./
 
 USER nobody
 EXPOSE 8080

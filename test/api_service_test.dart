@@ -37,13 +37,22 @@ void main() {
     test('sends a control command and returns only the server-confirmed state',
         () async {
       final client = _FakeClient((request) async {
-        expect(request.method, 'POST');
-        expect(request.url.path, '/api/devices/lamp-1/control');
-        if (request is! http.Request) {
-          fail('Control request must contain a JSON body.');
+        if (request.method == 'POST') {
+          expect(request.url.path, '/api/devices/lamp-1/control');
+          if (request is! http.Request) {
+            fail('Control request must contain a JSON body.');
+          }
+          expect(jsonDecode(request.body), {'state': 'ON'});
+          return http.Response(
+            jsonEncode({'commandId': 'command-1', 'status': 'pending'}),
+            202,
+          );
         }
-        expect(jsonDecode(request.body), {'state': 'ON'});
-        return http.Response(jsonEncode({'status': 'ON'}), 200);
+        expect(request.url.path, '/api/devices/lamp-1/commands/command-1');
+        return http.Response(
+          jsonEncode({'status': 'completed', 'reportedState': 'ON'}),
+          200,
+        );
       });
       final service = ApiService(client: client);
       service.configure('http://192.0.2.1:8080');
@@ -52,14 +61,78 @@ void main() {
       service.dispose();
     });
 
-    test('loads status when the control response does not include one',
+    test('registers, authenticates protected requests, and deletes account',
+        () async {
+      String? token;
+      final client = _FakeClient((request) async {
+        if (request.url.path == '/api/auth/register') {
+          expect(request.method, 'POST');
+          expect(request.headers.containsKey('Authorization'), isFalse);
+          expect(jsonDecode((request as http.Request).body), {
+            'name': 'Linh',
+            'email': 'linh@example.com',
+            'password': 'safe-password',
+          });
+          return http.Response(
+            jsonEncode({
+              'token': 'signed-session',
+              'user': {
+                'id': 'user-1',
+                'name': 'Linh',
+                'email': 'linh@example.com',
+              },
+            }),
+            200,
+          );
+        }
+        expect(request.headers['Authorization'], 'Bearer signed-session');
+        if (request.method == 'GET') {
+          expect(request.url.path, '/api/auth/me');
+          return http.Response(
+            jsonEncode({
+              'user': {
+                'id': 'user-1',
+                'name': 'Linh',
+                'email': 'linh@example.com',
+              },
+            }),
+            200,
+          );
+        }
+        expect(request.method, 'DELETE');
+        expect(jsonDecode((request as http.Request).body),
+            {'password': 'safe-password'});
+        return http.Response(jsonEncode({'deleted': true}), 200);
+      });
+      final service = ApiService(client: client)
+        ..configure('https://api.example.com');
+
+      final session = await service.register(
+        name: 'Linh',
+        email: 'linh@example.com',
+        password: 'safe-password',
+      );
+      token = session.token;
+      service.setAccessToken(token);
+      expect((await service.getCurrentUser()).email, 'linh@example.com');
+      await service.deleteAccount(password: 'safe-password');
+      service.dispose();
+    });
+
+    test('returns only state confirmed by the device command response',
         () async {
       final client = _FakeClient((request) async {
         if (request.method == 'POST') {
-          return http.Response('', 202);
+          return http.Response(
+            jsonEncode({'commandId': 'command-2', 'status': 'pending'}),
+            202,
+          );
         }
-        expect(request.url.path, '/api/devices/lamp-1/status');
-        return http.Response(jsonEncode({'state': 'OFF'}), 200);
+        expect(request.url.path, '/api/devices/lamp-1/commands/command-2');
+        return http.Response(
+          jsonEncode({'status': 'completed', 'reportedState': 'OFF'}),
+          200,
+        );
       });
       final service = ApiService(client: client);
       service.configure('http://192.0.2.1:8080');

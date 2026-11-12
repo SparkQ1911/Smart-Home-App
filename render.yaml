@@ -5,6 +5,29 @@ services:
     plan: free
     region: singapore
     rootDir: server
-    buildCommand: python -m py_compile smart_home_server.py
+    buildCommand: pip install -r requirements.txt && python -m py_compile smart_home_server.py mqtt_bridge.py
     startCommand: python smart_home_server.py
     healthCheckPath: /api/health
+    envVars:
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_PORT
+        value: "3306"
+      - key: MYSQL_DATABASE
+        value: nha_thong_minh
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: SMART_HOME_AUTH_SECRET
+        sync: false
+      - key: SMART_HOME_DEVICE_KEY
+        sync: false
+      - key: MQTT_HOST
+        value: io.adafruit.com
+      - key: MQTT_PORT
+        value: "8883"
+      - key: MQTT_USERNAME
+        sync: false
+      - key: MQTT_PASSWORD
+        sync: false
